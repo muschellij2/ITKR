@@ -8,8 +8,8 @@ cd ./src
 itkgit=https://github.com/InsightSoftwareConsortium/ITK.git
 # itktag=2714cc1805f50504f5b9a60d0f62ffec8e73989 # 4.11
 # itktag=c5138560409c75408ff76bccff938f21e5dcafc6 # 4.12
-itktag=d92873e33e8a54e933e445b92151191f02feab42 # 4.13
-# itktag=2f0c67f8831452189442eda50951e19b3fdbb3d3 # 5.0
+# itktag=d92873e33e8a54e933e445b92151191f02feab42 # 4.13
+  itktag=2f0c67f8831452189442eda50951e19b3fdbb3d3 # 5.0
 # itktag= # latest
 mkdir itks itkb
 git clone $itkgit itks
@@ -46,7 +46,7 @@ fi
 ${cmaker} \
     -G "MinGW Makefiles" \
     -DCMAKE_BUILD_TYPE:STRING="${CMAKE_BUILD_TYPE}" \
-    -DCMAKE_C_FLAGS="${CMAKE_C_FLAGS} ${compflags} -DNDEBUG  "\
+    -DCMAKE_C_FLAGS="${CMAKE_C_FLAGS} ${compflags} -DNDEBUG -D_FILE_OFFSET_BITS=64 "\
     -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS}${compflags} -DNDEBUG  "\
     -DCMAKE_SH:BOOL=OFF \
     -DITK_USE_GIT_PROTOCOL:BOOL=OFF \
