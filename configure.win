@@ -43,6 +43,18 @@ else
 fi
 rm -rf .git
 
+# GCC 15 no longer pulls in <cstdint> transitively; backport ITK 4f275769e3
+# (InsightSoftwareConsortium/ITK#5387) until itktag is bumped past it.
+fpefile="./Modules/Core/Common/include/itkFloatingPointExceptions.h"
+if [ -f "${fpefile}" ] && ! grep -q '^#include <cstdint>' "${fpefile}"; then
+    echo "working on itkFloatingPointExceptions.h for GCC 15 <cstdint>"
+    tmpfile="${fpefile}.tmp"
+    awk '
+        /^#include "itkMacro.h"/ && !done { print "#include <cstdint>"; done = 1 }
+        { print }
+    ' "${fpefile}" > "${tmpfile}" && mv "${tmpfile}" "${fpefile}"
+fi
+
 gdcmfile="./Modules/ThirdParty/GDCM/src/gdcm/Utilities/gdcmext/mec_mr3_io.c"
 if [ -f "${gdcmfile}" ]; then
     echo "working on mec_mr3_io.c for Windows alignment"
