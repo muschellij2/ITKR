@@ -10,3 +10,6 @@ src/symbols.rds
 R/.Rhistory
 .Rhistory
 .positai
+tools/
+itk-candidate-module-size.csv
+itk-current-module-size.csv
