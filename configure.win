@@ -4,7 +4,15 @@ CC=`${R_HOME}/bin${R_ARCH_BIN}/R.exe CMD config CC`
 CXX=`${R_HOME}/bin${R_ARCH_BIN}/R.exe CMD config CXX`
 JTHREADS=1
 CMAKE_BUILD_TYPE=Release
+# Build ITK with 2 jobs (CRAN's limit) unless MAKEFLAGS asks for more,
+# e.g. MAKEFLAGS=-j8 R CMD INSTALL ITKR
+make_jobs=`echo " ${MAKEFLAGS}" | sed -n -e 's/.*--jobs[= ]*\([0-9][0-9]*\).*/\1/p' -e 's/.* -*[a-zA-Z]*j *\([0-9][0-9]*\).*/\1/p' | head -n 1`
+if [ -z "${make_jobs}" ] || [ "${make_jobs}" -lt 1 ]; then
+  make_jobs=2
+fi
+echo "building ITK with ${make_jobs} jobs"
 cd ./src
+sed "s/@MAKE_JOBS@/${make_jobs}/" Makevars.win.in > Makevars.win
 # itkgit=https://github.com/InsightSoftwareConsortium/ITK
 # itktag=81c14ce858a530699ee2fbf7fa48b884ad26b984
 itkgit=https://github.com/InsightSoftwareConsortium/ITK.git
