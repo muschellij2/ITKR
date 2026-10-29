@@ -9,7 +9,15 @@ if [[ $TRAVIS -eq true ]] ; then
   CMAKE_BUILD_TYPE=Release
   JTHREADS=2
 fi
+# Build ITK with 2 jobs (CRAN's limit) unless MAKEFLAGS asks for more,
+# e.g. MAKEFLAGS=-j8 R CMD INSTALL ITKR
+make_jobs=`echo " ${MAKEFLAGS}" | sed -n -e 's/.*--jobs[= ]*\([0-9][0-9]*\).*/\1/p' -e 's/.* -*[a-zA-Z]*j *\([0-9][0-9]*\).*/\1/p' | head -n 1`
+if [ -z "${make_jobs}" ] || [ "${make_jobs}" -lt 1 ]; then
+  make_jobs=2
+fi
+echo "building ITK with ${make_jobs} jobs"
 cd ./src
+sed "s/@MAKE_JOBS@/${make_jobs}/" Makevars.in > Makevars
 itkgit=https://github.com/InsightSoftwareConsortium/ITK
 itktag=20edc269b1d9bf9ff27a34db40a438b1b3044f3c # April 28, 2025
 # if there is a directory but no git,
