@@ -1,7 +1,13 @@
-name: Windows binary release
+name: Release binaries
 
 on:
+  # rebuild binaries for an existing tag
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and publish
+        required: true
+        type: string
   push:
     tags:
       - 'v*'
@@ -25,6 +31,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -73,10 +81,76 @@ jobs:
             ${{ env.PACKAGE_ALIAS }}
             ${{ env.PACKAGE_RVER }}
 
+  macos-binary:
+    runs-on: macos-latest
+
+    name: macos (${{ matrix.r-version }})
+
+    strategy:
+      fail-fast: false
+      matrix:
+        r-version:
+          - oldrel-1
+          - release
+          - devel
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r-version }}
+          use-public-rspm: true
+
+      - name: Install package dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages("Rcpp")
+
+      - name: Build macOS binary
+        shell: bash
+        run: |
+          R CMD INSTALL --build .
+          # R >= 4.7 builds .tar.xz on macOS instead of .tgz
+          shopt -s nullglob
+          files=(ITKR_*.tgz ITKR_*.tar.xz)
+          if [ ${#files[@]} -ne 1 ]; then
+            echo "expected one ITKR binary, found: ${files[*]}" >&2
+            exit 1
+          fi
+          # republish every R version as .tgz so downstream CI handles one format
+          case "${files[0]}" in
+            *.tar.xz) xz -dc "${files[0]}" | gzip > ITKR.tgz ;;
+            *) cp "${files[0]}" ITKR.tgz ;;
+          esac
+          rver=$(Rscript -e 'cat(R.version$major, sub("[.].*", "", R.version$minor), sep = ".")')
+          arch=$(uname -m)
+          label="${{ matrix.r-version }}"
+          # ITKR-macos-<arch>-<setup-r version>.tgz is the stable name
+          # ANTsRCore CI fetches from releases/latest/download/
+          asset="ITKR-macos-${arch}-${label}-R${rver}.tgz"
+          alias="ITKR-macos-${arch}-${label}.tgz"
+          cp ITKR.tgz "$asset"
+          cp ITKR.tgz "$alias"
+          echo "PACKAGE_ASSET=$asset" >> "$GITHUB_ENV"
+          echo "PACKAGE_ALIAS=$alias" >> "$GITHUB_ENV"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_ASSET }}
+          path: |
+            ${{ env.PACKAGE_ASSET }}
+            ${{ env.PACKAGE_ALIAS }}
+
   publish:
-    needs: windows-binary
+    needs:
+      - windows-binary
+      - macos-binary
     # publish whatever built, so a devel failure doesn't block oldrel/release
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ !cancelled() && (inputs.tag || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
 
     steps:
@@ -84,14 +158,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: assets
-          pattern: ITKR-*.zip
+          pattern: ITKR-*
           merge-multiple: true
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           # downstream CI downloads from releases/latest/download/
           make_latest: true
-          files: assets/*.zip
+          files: |
+            assets/*.zip
+            assets/*.tgz
           fail_on_unmatched_files: true
           overwrite_files: true
