@@ -66,6 +66,17 @@ if [ -f "${fpefile}" ] && ! grep -q '^#include <cstdint>' "${fpefile}"; then
     ' "${fpefile}" > "${tmpfile}" && mv "${tmpfile}" "${fpefile}"
 fi
 
+# Emscripten's <fenv.h> has no FE_INVALID (WebAssembly has no FP exceptions),
+# so make HDF5's feclearexcept(FE_INVALID) a no-op there.
+h5floatfile="./Modules/ThirdParty/HDF5/src/itkhdf5/src/H5Tinit_float.c"
+if [ -f "${h5floatfile}" ] && ! grep -q 'define FE_INVALID' "${h5floatfile}"; then
+    echo "working on H5Tinit_float.c for FE_INVALID"
+    tmpfile="${h5floatfile}.tmp"
+    awk '
+        /^#include "H5Tpkg.h"/ && !done { print; print "#ifndef FE_INVALID"; print "#define FE_INVALID 0"; print "#endif"; done = 1; next }
+        { print }
+    ' "${h5floatfile}" > "${tmpfile}" && mv "${tmpfile}" "${h5floatfile}"
+fi
 
 cd ../
 if [[ ! -d ../data/ ]] ; then
@@ -95,6 +106,18 @@ if [[ -z "${cmaker}" ]]; then
 else
 	cmaker="cmake"
 fi
+# WebAssembly (webR / rwasm) builds set CC to emcc; run cmake through emcmake
+# so ITK sees the Emscripten toolchain (EMSCRIPTEN set, node for try_run)
+# instead of configuring for the Linux host. webR links everything as a side
+# module, which breaks executables, so skip ITK's test driver program.
+wasm_flags=""
+case "${CC}" in
+  *emcc*)
+    echo "building ITK for WebAssembly with emcmake"
+    cmaker="emcmake ${cmaker}"
+    wasm_flags="-DDO_NOT_BUILD_ITK_TEST_DRIVER:BOOL=ON"
+    ;;
+esac
 
 ${cmaker} \
     -DCMAKE_BUILD_TYPE:STRING="${CMAKE_BUILD_TYPE}" \
@@ -103,6 +126,7 @@ ${cmaker} \
     -DCMAKE_C_FLAGS="${CMAKE_C_FLAGS} ${compcflags} -DNDEBUG  "\
     -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} ${compcxxflags} -DNDEBUG  "\
     -DCMAKE_OSX_SYSROOT="${osx_sysroot}"\
+    ${wasm_flags} \
     -DITK_USE_GIT_PROTOCOL:BOOL=OFF \
     -DBUILD_SHARED_LIBS=OFF \
     -DBUILD_TESTING:BOOL=OFF \
